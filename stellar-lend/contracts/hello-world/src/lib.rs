@@ -70,9 +70,13 @@ impl HelloContract {
     }
 
     pub fn initialize(env: Env, admin: Address) -> Result<(), RiskManagementError> {
-        if crate::admin::has_admin(&env) {
-            return Err(RiskManagementError::Unauthorized);
+        // Check if already initialized (comprehensive check)
+        if crate::admin::has_admin(&env) || 
+           crate::risk_management::get_risk_config(&env).is_some() ||
+           crate::interest_rate::get_interest_rate_config(&env).is_some() {
+            return Err(RiskManagementError::AlreadyInitialized);
         }
+        
         crate::admin::set_admin(&env, admin.clone(), None)
             .map_err(|_| RiskManagementError::Unauthorized)?;
         risk_management::initialize_risk_management(&env, admin.clone())?;
@@ -284,6 +288,93 @@ impl HelloContract {
     /// Return the current fee configuration
     pub fn get_fee_config(env: Env) -> treasury::TreasuryFeeConfig {
         treasury::get_fee_config(&env)
+    }
+
+    // -------------------------------------------------------------------------
+    // Risk Parameter Getters (for testing)
+    // -------------------------------------------------------------------------
+
+    /// Get minimum collateral ratio (in basis points)
+    pub fn get_min_collateral_ratio(env: Env) -> i128 {
+        risk_params::get_risk_params(&env)
+            .map(|p| p.min_collateral_ratio)
+            .unwrap_or(11_000)
+    }
+
+    /// Get liquidation threshold (in basis points)
+    pub fn get_liquidation_threshold(env: Env) -> i128 {
+        risk_params::get_risk_params(&env)
+            .map(|p| p.liquidation_threshold)
+            .unwrap_or(10_500)
+    }
+
+    /// Get close factor (in basis points)
+    pub fn get_close_factor(env: Env) -> i128 {
+        risk_params::get_risk_params(&env)
+            .map(|p| p.close_factor)
+            .unwrap_or(5_000)
+    }
+
+    /// Get liquidation incentive (in basis points)
+    pub fn get_liquidation_incentive(env: Env) -> i128 {
+        risk_params::get_risk_params(&env)
+            .map(|p| p.liquidation_incentive)
+            .unwrap_or(1_000)
+    }
+
+    /// Get current utilization (in basis points)
+    pub fn get_utilization(env: Env) -> i128 {
+        interest_rate::calculate_utilization(&env).unwrap_or(0)
+    }
+
+    /// Get current borrow rate (in basis points)
+    pub fn get_borrow_rate(env: Env) -> i128 {
+        interest_rate::calculate_borrow_rate(&env).unwrap_or(0)
+    }
+
+    /// Get current supply rate (in basis points)
+    pub fn get_supply_rate(env: Env) -> i128 {
+        interest_rate::calculate_supply_rate(&env).unwrap_or(0)
+    }
+
+    /// Get risk configuration
+    pub fn get_risk_config(env: Env) -> Option<risk_management::RiskConfig> {
+        risk_management::get_risk_config(&env)
+    }
+
+    /// Check if operation is paused
+    pub fn is_operation_paused(env: Env, operation: soroban_sdk::Symbol) -> bool {
+        risk_management::is_operation_paused(&env, operation)
+    }
+
+    /// Check if emergency pause is active
+    pub fn is_emergency_paused(env: Env) -> bool {
+        risk_management::is_emergency_paused(&env)
+    }
+
+    /// Update interest rate configuration (admin-only)
+    pub fn update_interest_rate_config(
+        env: Env,
+        caller: Address,
+        base_rate_bps: Option<i128>,
+        kink_utilization_bps: Option<i128>,
+        multiplier_bps: Option<i128>,
+        jump_multiplier_bps: Option<i128>,
+        rate_floor_bps: Option<i128>,
+        rate_ceiling_bps: Option<i128>,
+        spread_bps: Option<i128>,
+    ) -> Result<(), interest_rate::InterestRateError> {
+        interest_rate::update_interest_rate_config(
+            &env,
+            caller,
+            base_rate_bps,
+            kink_utilization_bps,
+            multiplier_bps,
+            jump_multiplier_bps,
+            rate_floor_bps,
+            rate_ceiling_bps,
+            spread_bps,
+        )
     }
 
     // -------------------------------------------------------------------------
